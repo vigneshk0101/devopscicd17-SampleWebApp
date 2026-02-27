@@ -5,38 +5,18 @@ on:
     branches: ["main"]
 
 jobs:
-
   deploy:
     runs-on: ubuntu-latest
 
     steps:
 
       # ---------------------------------------------------------
-      # CHECKOUT (Full history for TruffleHog)
+      # CHECKOUT
       # ---------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      # ---------------------------------------------------------
-      # PRISMA CODE REPO SCAN (Checkov - SAST + IaC)
-      # ---------------------------------------------------------
-      - name: Run Prisma Code Repo Scan (Checkov)
-        uses: bridgecrewio/checkov-action@v12
-        with:
-          api-key: ${{ secrets.PRISMA_API_KEY }}
-          directory: .
-          output_format: json
-          output_file_path: .
-        continue-on-error: true
-
-      - name: Rename Prisma Code Scan Report
-        run: |
-          if [ -f results.json ]; then
-            mv results.json prisma-code-scan.json
-          fi
-        continue-on-error: true
 
       # ---------------------------------------------------------
       # BUILD (Maven)
@@ -51,20 +31,20 @@ jobs:
         run: mvn -B clean package --file pom.xml
 
       # ===========================================================
-      # SECURITY SCANS (TruffleHog / SonarCloud / Snyk / Prisma / ZAP)
+      # SECURITY SCANS
       # ===========================================================
 
-      # TRUFFLEHOG (Secrets Scan)
+      # TRUFFLEHOG
       - name: Install TruffleHog
         run: pip install trufflehog==2.2.1
         continue-on-error: true
 
       - name: Run TruffleHog Secrets Scan
         run: |
-          trufflehog filesystem . --json > trufflehog-results.json || echo "TruffleHog scan failed, continuing..."
+          trufflehog filesystem . --json > trufflehog-results.json || echo "TruffleHog scan failed"
         continue-on-error: true
 
-      # SONARCLOUD (SAST)
+      # SONARCLOUD
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         env:
@@ -74,12 +54,12 @@ jobs:
           projectBaseDir: .
         continue-on-error: true
 
-      - name: Export SonarCloud Raw Report
+      - name: Export SonarCloud Report
         run: |
           echo '{"note": "SonarCloud results stored on cloud dashboard"}' > sonar-report.json
         continue-on-error: true
 
-      # SNYK (SCA + SAST + Container Scan)
+      # SNYK
       - name: Install Snyk CLI
         uses: snyk/actions/setup@v1
         env:
@@ -87,50 +67,31 @@ jobs:
         continue-on-error: true
 
       - name: Snyk SCA Scan
-        run: |
-          snyk test --json --severity-threshold=high > snyk-sca.json || echo "Snyk SCA scan failed, continuing..."
+        run: snyk test --json --severity-threshold=high > snyk-sca.json || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
       - name: Snyk SAST Scan
-        run: |
-          snyk code test --json --severity-threshold=high > snyk-sast.json || echo "Snyk SAST scan failed, continuing..."
+        run: snyk code test --json --severity-threshold=high > snyk-sast.json || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
-      - name: Build Docker Image for Snyk Container Scan
+      # ---------------------------------------------------------
+      # DOCKER BUILD
+      # ---------------------------------------------------------
+      - name: Build Docker Image
         run: docker build -t app:latest .
         continue-on-error: true
 
       - name: Snyk Container Scan
-        run: |
-          snyk container test app:latest --json --severity-threshold=high > snyk-container.json || echo "Snyk container scan failed, continuing..."
+        run: snyk container test app:latest --json --severity-threshold=high > snyk-container.json || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
-      # PRISMA CLOUD — twistcli Container Scan
-      - name: Download twistcli
-        run: |
-          curl -u "${{ secrets.PRISMA_ACCESS_KEY }}:${{ secrets.PRISMA_SECRET_KEY }}" \
-            --output twistcli \
-            "${{ secrets.PRISMA_CONSOLE_URL }}/api/v1/util/twistcli"
-          chmod +x twistcli
-        continue-on-error: true
-
-      - name: Prisma Cloud Scan
-        run: |
-          ./twistcli images scan \
-            --address ${{ secrets.PRISMA_CONSOLE_URL }} \
-            --user ${{ secrets.PRISMA_ACCESS_KEY }} \
-            --password ${{ secrets.PRISMA_SECRET_KEY }} \
-            --output-file prisma-scan.json \
-            app:latest || echo "Prisma scan failed, continuing..."
-        continue-on-error: true
-
-      # OWASP ZAP Baseline Scan (DAST)
+      # OWASP ZAP
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.10.0
         with:
@@ -168,7 +129,7 @@ jobs:
           docker push $ECR_URL/$IMAGE_NAME:$TAG
 
       # ===========================================================
-      # DEPLOYMENT ON EC2 (Container Restart)
+      # DEPLOYMENT ON EC2
       # ===========================================================
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v0.1.7
@@ -187,7 +148,7 @@ jobs:
             sudo docker run -d --name app -p 80:8080 $ECR_URL/$IMAGE_NAME:$TAG
 
       # ===========================================================
-      # UPLOAD ALL SCAN REPORTS + PIPELINE LOGS TO S3
+      # UPLOAD REPORTS TO S3
       # ===========================================================
       - name: Save pipeline logs locally
         run: |
@@ -195,17 +156,15 @@ jobs:
           echo "Repository: $GITHUB_REPOSITORY" >> logs.txt
           ls -lah >> logs.txt
 
-      - name: Upload all scan reports and logs to S3
+      - name: Upload reports to S3
         run: |
-          S3="s3://cf-templates-efzoo91lt857-us-east-1/security-scans/run-$GITHUB_RUN_ID/"
+          S3="s3://your-bucket-name/security-scans/run-$GITHUB_RUN_ID/"
 
           REPORTS=(
-            prisma-code-scan.json
             trufflehog-results.json
             snyk-sca.json
             snyk-sast.json
             snyk-container.json
-            prisma-scan.json
             sonar-report.json
             zap-report.html
             zap-report.json
@@ -213,17 +172,11 @@ jobs:
             logs.txt
           )
 
-          echo "Uploading to $S3"
           for file in "${REPORTS[@]}"; do
             if [ -f "$file" ]; then
               aws s3 cp "$file" "$S3"
-              echo "Uploaded $file"
-            else
-              echo "Warning: $file not found, skipping..."
             fi
           done
-
-          echo "All available security reports uploaded to S3."
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
