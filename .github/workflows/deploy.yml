@@ -176,7 +176,7 @@ jobs:
 
       - name: Upload Reports to S3
         run: |
-          S3="s3://your-bucket-name/security-scans/run-$GITHUB_RUN_ID/"
+          S3="s3://s3bucketdevsecops/security-scans/run-$GITHUB_RUN_ID/"
 
           REPORTS=(
             trufflehog-results.json
