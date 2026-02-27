@@ -166,6 +166,7 @@ jobs:
           script: |
             ECR_URL=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
             IMAGE_NAME=${{ secrets.ECR_REPO_NAME }}
+            TAG="latest"
 
             # Login to ECR from EC2
             aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
