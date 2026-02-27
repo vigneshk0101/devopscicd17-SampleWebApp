@@ -34,17 +34,16 @@ jobs:
       # SECURITY SCANS
       # ===========================================================
 
-      # TRUFFLEHOG (Secrets Scan)
+      # TRUFFLEHOG
       - name: Install TruffleHog
         run: pip install trufflehog==2.2.1
         continue-on-error: true
 
       - name: Run TruffleHog Scan
-        run: |
-          trufflehog filesystem . --json > trufflehog-results.json || true
+        run: trufflehog filesystem . --json > trufflehog-results.json || true
         continue-on-error: true
 
-      # SONARCLOUD (SAST)
+      # SONARCLOUD
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         env:
@@ -55,11 +54,10 @@ jobs:
         continue-on-error: true
 
       - name: Export Sonar Report Placeholder
-        run: |
-          echo '{"note": "SonarCloud results stored on dashboard"}' > sonar-report.json
+        run: echo '{"note": "SonarCloud results stored on dashboard"}' > sonar-report.json
         continue-on-error: true
 
-      # SNYK (SCA + SAST)
+      # SNYK
       - name: Install Snyk CLI
         uses: snyk/actions/setup@v1
         env:
@@ -90,7 +88,31 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
+      # ===========================================================
+      # TRIVY SCANS (Added)
+      # ===========================================================
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.0_Linux-64bit.deb
+
+      - name: Trivy Filesystem Scan (Dependencies + IaC)
+        run: |
+          trivy fs --severity HIGH,CRITICAL --format json -o trivy-fs.json . || true
+        continue-on-error: true
+
+      - name: Trivy Container Scan
+        run: |
+          trivy image --severity HIGH,CRITICAL --format json -o trivy-container.json app:latest || true
+        continue-on-error: true
+
+      # ===========================================================
       # OWASP ZAP (DAST)
+      # ===========================================================
+
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.10.0
         with:
@@ -108,6 +130,7 @@ jobs:
       # ===========================================================
       # AWS LOGIN + PUSH TO ECR
       # ===========================================================
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -130,6 +153,7 @@ jobs:
       # ===========================================================
       # DEPLOY ON EC2
       # ===========================================================
+
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v0.1.7
         with:
@@ -149,11 +173,6 @@ jobs:
       # ===========================================================
       # UPLOAD REPORTS TO S3
       # ===========================================================
-      - name: Save Pipeline Logs
-        run: |
-          echo "Run ID: $GITHUB_RUN_ID" > logs.txt
-          echo "Repository: $GITHUB_REPOSITORY" >> logs.txt
-          ls -lah >> logs.txt
 
       - name: Upload Reports to S3
         run: |
@@ -164,11 +183,12 @@ jobs:
             snyk-sca.json
             snyk-sast.json
             snyk-container.json
+            trivy-fs.json
+            trivy-container.json
             sonar-report.json
             zap-report.html
             zap-report.json
             zap-report.md
-            logs.txt
           )
 
           for file in "${REPORTS[@]}"; do
