@@ -88,25 +88,29 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
-      # ===========================================================
-      # TRIVY SCANS (Added)
-      # ===========================================================
-
-      - name: Install Trivy
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.0_Linux-64bit.deb
-          sudo dpkg -i trivy_0.50.0_Linux-64bit.deb
-
-      - name: Trivy Filesystem Scan (Dependencies + IaC)
-        run: |
-          trivy fs --severity HIGH,CRITICAL --format json -o trivy-fs.json . || true
+      # -------------------------------
+      # TRIVY FILESYSTEM SCAN
+      # -------------------------------
+      - name: Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: json
+          output: trivy-fs.json
+          severity: HIGH,CRITICAL
         continue-on-error: true
 
+      # -------------------------------
+      # TRIVY CONTAINER SCAN
+      # -------------------------------
       - name: Trivy Container Scan
-        run: |
-          trivy image --severity HIGH,CRITICAL --format json -o trivy-container.json app:latest || true
+        uses: aquasecurity/trivy-action@0.24.0
+        with:
+          image-ref: app:latest
+          format: json
+          output: trivy-container.json
+          severity: HIGH,CRITICAL
         continue-on-error: true
 
       # ===========================================================
