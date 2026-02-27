@@ -34,17 +34,17 @@ jobs:
       # SECURITY SCANS
       # ===========================================================
 
-      # TRUFFLEHOG
+      # TRUFFLEHOG (Secrets Scan)
       - name: Install TruffleHog
         run: pip install trufflehog==2.2.1
         continue-on-error: true
 
-      - name: Run TruffleHog Secrets Scan
+      - name: Run TruffleHog Scan
         run: |
-          trufflehog filesystem . --json > trufflehog-results.json || echo "TruffleHog scan failed"
+          trufflehog filesystem . --json > trufflehog-results.json || true
         continue-on-error: true
 
-      # SONARCLOUD
+      # SONARCLOUD (SAST)
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         env:
@@ -54,25 +54,25 @@ jobs:
           projectBaseDir: .
         continue-on-error: true
 
-      - name: Export SonarCloud Report
+      - name: Export Sonar Report Placeholder
         run: |
-          echo '{"note": "SonarCloud results stored on cloud dashboard"}' > sonar-report.json
+          echo '{"note": "SonarCloud results stored on dashboard"}' > sonar-report.json
         continue-on-error: true
 
-      # SNYK
+      # SNYK (SCA + SAST)
       - name: Install Snyk CLI
         uses: snyk/actions/setup@v1
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
-      - name: Snyk SCA Scan
+      - name: Snyk Dependency Scan
         run: snyk test --json --severity-threshold=high > snyk-sca.json || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
-      - name: Snyk SAST Scan
+      - name: Snyk Code Scan
         run: snyk code test --json --severity-threshold=high > snyk-sast.json || true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -83,7 +83,6 @@ jobs:
       # ---------------------------------------------------------
       - name: Build Docker Image
         run: docker build -t app:latest .
-        continue-on-error: true
 
       - name: Snyk Container Scan
         run: snyk container test app:latest --json --severity-threshold=high > snyk-container.json || true
@@ -91,7 +90,7 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
 
-      # OWASP ZAP
+      # OWASP ZAP (DAST)
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.10.0
         with:
@@ -129,7 +128,7 @@ jobs:
           docker push $ECR_URL/$IMAGE_NAME:$TAG
 
       # ===========================================================
-      # DEPLOYMENT ON EC2
+      # DEPLOY ON EC2
       # ===========================================================
       - name: Deploy on EC2
         uses: appleboy/ssh-action@v0.1.7
@@ -150,13 +149,13 @@ jobs:
       # ===========================================================
       # UPLOAD REPORTS TO S3
       # ===========================================================
-      - name: Save pipeline logs locally
+      - name: Save Pipeline Logs
         run: |
           echo "Run ID: $GITHUB_RUN_ID" > logs.txt
           echo "Repository: $GITHUB_REPOSITORY" >> logs.txt
           ls -lah >> logs.txt
 
-      - name: Upload reports to S3
+      - name: Upload Reports to S3
         run: |
           S3="s3://your-bucket-name/security-scans/run-$GITHUB_RUN_ID/"
 
