@@ -54,7 +54,7 @@ jobs:
         continue-on-error: true
 
       - name: Export Sonar Report Placeholder
-        run: echo '{"note": "SonarCloud results stored on dashboard"}' > sonar-report.json
+        run: echo '{"note":"SonarCloud results stored on dashboard"}' > sonar-report.json
         continue-on-error: true
 
       # SNYK
