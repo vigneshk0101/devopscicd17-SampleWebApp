@@ -157,26 +157,25 @@ jobs:
       # ===========================================================
       # DEPLOY ON EC2
       # ===========================================================
-
       - name: Deploy on EC2
-  uses: appleboy/ssh-action@v0.1.7
-  with:
-    host: ${{ secrets.EC2_HOST }}
-    username: ${{ secrets.EC2_USER }}
-    key: ${{ secrets.EC2_SSH_KEY }}
-    script: |
-      ECR_URL=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
-      IMAGE_NAME=${{ secrets.ECR_REPO_NAME }}
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            ECR_URL=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+            IMAGE_NAME=${{ secrets.ECR_REPO_NAME }}
 
-      # Login to ECR from EC2
-      aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-        | sudo docker login --username AWS --password-stdin $ECR_URL
+            # Login to ECR from EC2
+            aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+              | sudo docker login --username AWS --password-stdin $ECR_URL
 
-      sudo docker pull $ECR_URL/$IMAGE_NAME:latest
-      sudo docker stop app || true
-      sudo docker rm app || true
-      sudo docker run -d --name app -p 80:8080 $ECR_URL/$IMAGE_NAME:latest
-
+            sudo docker pull $ECR_URL/$IMAGE_NAME:latest
+            sudo docker stop app || true
+            sudo docker rm app || true
+            sudo docker run -d --name app -p 80:8080 $ECR_URL/$IMAGE_NAME:latest
+     
       # ===========================================================
       # UPLOAD REPORTS TO S3
       # ===========================================================
